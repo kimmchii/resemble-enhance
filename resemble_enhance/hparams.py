@@ -42,7 +42,7 @@ class HParams:
     praat_augment_prob: float = 0
 
     # Audio settings
-    wav_rate: int = 44_100
+    wav_rate: int = 16_000
     n_fft: int = 2048
     win_size: int = 2048
     hop_size: int = 420  # 9.5ms
