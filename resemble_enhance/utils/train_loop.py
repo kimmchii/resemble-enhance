@@ -16,6 +16,9 @@ from .utils import tree_map
 
 logger = logging.getLogger(__name__)
 
+import wandb
+wandb_logger = wandb.init(project="resemble-enhance-denoiser", job_type="train")
+
 
 class EvalFn(Protocol):
     def __call__(self, engine: Engine, eval_dir: Path) -> None:
@@ -220,6 +223,11 @@ class TrainLoop:
                 torch.cuda.synchronize()
                 stats["elapsed_time"] = time.time() - start_time
                 stats = tree_map(lambda x: float(f"{x:.4g}") if isinstance(x, float) else x, stats)
+                loss_l1 = stats["G/losses/l1"]
+                loss = stats["G/loss"]
+
+                if step % 2 == 0:
+                    wandb_logger.log({"G/loss": loss, "G/l1": loss_l1})
                 # print(stats)
                 logger.info(json.dumps(stats, indent=0))
 
@@ -228,7 +236,11 @@ class TrainLoop:
                 evaling = step % eval_every == 0 or step in warmup_steps or command.strip() == "eval"
                 if eval_fn is not None and is_global_leader() and eval_dir is not None and evaling:
                     engine_G.eval()
-                    eval_fn(engine_G, eval_dir=eval_dir)
+                    avg_si_snr_score = eval_fn(engine_G, eval_dir=eval_dir)
+
+                    # Log the si-snr score to wandb
+                    wandb_logger.log({"si-snr": avg_si_snr_score})
+
                     engine_G.train()
 
                 if command.strip() == "quit":
