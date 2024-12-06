@@ -13,7 +13,7 @@ def walk_paths(root, suffix):
 
 
 def rglob_audio_files(path: Path):
-    return list(walk_paths(path, ".wav")) + list(walk_paths(path, ".flac"))
+    return list(walk_paths(path, ".wav")) + list(walk_paths(path, ".flac")) + list(walk_paths(path, ".mp3"))
 
 
 def mix_fg_bg(fg: Tensor, bg: Tensor, alpha: float | Callable[..., float] = 0.5, eps=1e-7):
