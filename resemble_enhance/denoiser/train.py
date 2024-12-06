@@ -85,7 +85,7 @@ def main():
         model.eval()
 
         step = engine.global_step
-
+        si_snr_scores = []
         for i, batch in enumerate(tqdm(val_dl), 1):
             batch = tree_map(lambda x: x.to(args.device) if isinstance(x, Tensor) else x, batch)
 
@@ -106,7 +106,9 @@ def main():
 
             # Calculate si-snr score
             si_snr_score = si_snr(pred_fg_dwavs[0], fg_dwavs[0])
-            print(f"si-snr: {si_snr_score}", i)
+            si_snr_scores.append(si_snr_score)
+            # print(f"si-snr: {si_snr_score}", i)
+
             save_mels(
                 get_path(".png"),
                 cond_mel=mx_mels[0].cpu().numpy(),
@@ -116,6 +118,8 @@ def main():
 
             if i >= n_saved:
                 break
+        
+        return sum(si_snr_scores)/len(si_snr_scores)
 
     train_loop = TrainLoop(
         run_dir=args.run_dir,
