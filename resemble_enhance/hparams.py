@@ -52,7 +52,7 @@ class HParams:
     mix_alpha_range: tuple[float, float] = (0.2, 0.8)
 
     # Training
-    nj: int = 64
+    nj: int = 8
     training_seconds: float = 1.0
     batch_size_per_gpu: int = 16
     min_lr: float = 1e-5
