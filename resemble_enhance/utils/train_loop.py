@@ -18,19 +18,23 @@ logger = logging.getLogger(__name__)
 
 
 class EvalFn(Protocol):
-    def __call__(self, engine: Engine, eval_dir: Path) -> None: ...
+    def __call__(self, engine: Engine, eval_dir: Path) -> None:
+        ...
 
 
 class EngineLoader(Protocol):
-    def __call__(self, run_dir: Path) -> Engine: ...
+    def __call__(self, run_dir: Path) -> Engine:
+        ...
 
 
 class GenFeeder(Protocol):
-    def __call__(self, engine: Engine, batch: dict[str, Tensor]) -> tuple[Tensor, dict[str, Tensor]]: ...
+    def __call__(self, engine: Engine, batch: dict[str, Tensor]) -> tuple[Tensor, dict[str, Tensor]]:
+        ...
 
 
 class DisFeeder(Protocol):
-    def __call__(self, engine: Engine, batch: dict[str, Tensor] | None, fake: Tensor) -> dict[str, Tensor]: ...
+    def __call__(self, engine: Engine, batch: dict[str, Tensor] | None, fake: Tensor) -> dict[str, Tensor]:
+        ...
 
 
 @dataclass
@@ -45,9 +49,9 @@ class TrainLoop:
     load_D: EngineLoader | None = None
     feed_D: DisFeeder | None = None
 
-    update_every: int = 5_000
-    eval_every: int = 5_000
-    backup_steps: tuple[int, ...] = (5_000, 100_000, 500_000)
+    update_every: int = 10
+    eval_every: int = 10 #5_000
+    backup_steps: tuple[int, ...] = (10, 20, 30)
 
     device: str = "cuda"
     eval_fn: EvalFn | None = None
@@ -165,7 +169,12 @@ class TrainLoop:
                 assert isinstance(loss_G, Tensor)
                 stats["G/loss"] = loss_G.item()
                 stats["G/lr"] = engine_G.get_lr()[0]
-                stats["G/grad_norm"] = engine_G.get_grad_norm() or 0
+                g_grad_norm = engine_G.get_grad_norm()
+                
+                if g_grad_norm:
+                    stats["G/grad_norm"] = g_grad_norm.cpu().item()
+                else:
+                    stats["G/grad_norm"] = 0
 
                 if loss_G.isnan().item():
                     logger.error("Generator loss is NaN, skipping step")
@@ -200,11 +209,18 @@ class TrainLoop:
 
                     stats["D/loss"] = loss_D.item()
                     stats["D/lr"] = engine_D.get_lr()[0]
-                    stats["D/grad_norm"] = engine_D.get_grad_norm() or 0
+                    d_grad_norm = engine_D.get_grad_norm()
+
+                    if d_grad_norm:
+                        stats["D/grad_norm"] = d_grad_norm.cpu().item()
+                    else:
+                        stats["D/grad_norm"] = 0
+                   
 
                 torch.cuda.synchronize()
                 stats["elapsed_time"] = time.time() - start_time
                 stats = tree_map(lambda x: float(f"{x:.4g}") if isinstance(x, float) else x, stats)
+                # print(stats)
                 logger.info(json.dumps(stats, indent=0))
 
                 command = non_blocking_input()
@@ -235,7 +251,7 @@ class TrainLoop:
     @classmethod
     def set_running_loop_(cls, loop):
         assert isinstance(loop, cls), f"Expected {cls}, got {type(loop)}"
-        cls._running_loop = loop
+        cls._running_loop: cls = loop
 
     @classmethod
     def get_running_loop(cls) -> "TrainLoop | None":
