@@ -33,6 +33,24 @@ def save_wav(path: Path, wav: Tensor, rate: int):
     wav = wav.detach().cpu().numpy()
     soundfile.write(path, wav, samplerate=rate)
 
+def si_snr(estimate, reference, epsilon=1e-8):
+    estimate = estimate - estimate.mean()
+    reference = reference - reference.mean()
+    reference_pow = reference.pow(2).mean(axis=0, keepdim=True)
+    mix_pow = (estimate * reference).mean(axis=0, keepdim=True)
+    scale = mix_pow / (reference_pow + epsilon)
+
+    reference = scale * reference
+    error = estimate - reference
+
+    reference_pow = reference.pow(2)
+    error_pow = error.pow(2)
+
+    reference_pow = reference_pow.mean(axis=0)
+    error_pow = error_pow.mean(axis=0)
+
+    si_snr = 10 * torch.log10(reference_pow) - 10 * torch.log10(error_pow)
+    return si_snr.item()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -86,6 +104,9 @@ def main():
             save_wav(get_path("_predict.wav"), pred_fg_dwavs[0], rate=rate)
             save_wav(get_path("_target.wav"), fg_dwavs[0], rate=rate)
 
+            # Calculate si-snr score
+            si_snr_score = si_snr(pred_fg_dwavs[0], fg_dwavs[0])
+            print(f"si-snr: {si_snr_score}", i)
             save_mels(
                 get_path(".png"),
                 cond_mel=mx_mels[0].cpu().numpy(),
