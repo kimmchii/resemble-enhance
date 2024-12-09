@@ -84,13 +84,17 @@ class TrainLoop:
         return path
 
     def __post_init__(self):
+        # Load the generator engine (Denoiser's here)
         engine_G = self.load_G(self.run_dir)
+        # Load the discriminator engine (None for Denoiser)
         if self.load_D is None:
             engine_D = None
         else:
             engine_D = self.load_D(self.run_dir)
         self.engine_G = engine_G
         self.engine_D = engine_D
+
+        self.early_stopper = EarlyStopper(patience=5)
 
     @property
     def model_G(self):
