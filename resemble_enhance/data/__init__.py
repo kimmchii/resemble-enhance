@@ -10,11 +10,12 @@ from .utils import mix_fg_bg, rglob_audio_files
 logger = logging.getLogger(__name__)
 
 
-def _create_datasets(hp: HParams, mode, val_size=10, seed=123):
+def _create_datasets(hp: HParams, mode, val_ratio = 10, seed=123):
     paths = rglob_audio_files(hp.fg_dir)
     logger.info(f"Found {len(paths)} audio files in {hp.fg_dir}")
 
     random.Random(seed).shuffle(paths)
+    val_size = len(paths) // val_ratio
     train_paths = paths[:-val_size]
     val_paths = paths[-val_size:]
 
