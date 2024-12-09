@@ -52,9 +52,10 @@ class TrainLoop:
     load_D: EngineLoader | None = None
     feed_D: DisFeeder | None = None
 
-    update_every: int = 10
-    eval_every: int = 10 #5_000
-    backup_steps: tuple[int, ...] = (10, 20, 30)
+    # Set update_every and eval_every to be the same
+    update_every: int = 5_000
+    eval_every: int = update_every 
+    backup_steps: tuple[int, ...] = (5_000, 100_000, 500_000)
 
     device: str = "cuda"
     eval_fn: EvalFn | None = None
