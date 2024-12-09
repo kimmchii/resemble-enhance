@@ -226,7 +226,7 @@ class TrainLoop:
                 loss_l1 = stats["G/losses/l1"]
                 loss = stats["G/loss"]
 
-                if step % 2 == 0:
+                if step % 1000 == 0:
                     wandb_logger.log({"G/loss": loss, "G/l1": loss_l1})
                 # print(stats)
                 logger.info(json.dumps(stats, indent=0))
