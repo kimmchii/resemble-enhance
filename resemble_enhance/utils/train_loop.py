@@ -84,9 +84,7 @@ class TrainLoop:
         return path
 
     def __post_init__(self):
-        # Load the generator engine (Denoiser's here)
         engine_G = self.load_G(self.run_dir)
-        # Load the discriminator engine (None for Denoiser)
         if self.load_D is None:
             engine_D = None
         else:
@@ -94,7 +92,7 @@ class TrainLoop:
         self.engine_G = engine_G
         self.engine_D = engine_D
 
-        self.early_stopper = EarlyStopper(patience=5)
+        self.early_stopper = EarlyStopper(patience=10, min_delta=0.0001)
 
     @property
     def model_G(self):
@@ -140,6 +138,7 @@ class TrainLoop:
 
         while True:
             loss_G = loss_D = 0
+            should_stop = False
 
             for batch in train_dl:
                 torch.cuda.synchronize()
@@ -224,15 +223,14 @@ class TrainLoop:
                     else:
                         stats["D/grad_norm"] = 0
                    
-
                 torch.cuda.synchronize()
                 stats["elapsed_time"] = time.time() - start_time
                 stats = tree_map(lambda x: float(f"{x:.4g}") if isinstance(x, float) else x, stats)
                 loss_l1 = stats["G/losses/l1"]
                 loss = stats["G/loss"]
 
-                if step % self.update_every == 0:
-                    wandb_logger.log({"G/loss": loss, "G/l1": loss_l1})
+                if step % 100 == 0:
+                    wandb_logger.log({"generator - denoiser/loss": loss, "generator - denoiser/l1": loss_l1})
                 # print(stats)
                 logger.info(json.dumps(stats, indent=0))
 
@@ -241,10 +239,12 @@ class TrainLoop:
                 evaling = step % eval_every == 0 or step in warmup_steps or command.strip() == "eval"
                 if eval_fn is not None and is_global_leader() and eval_dir is not None and evaling:
                     engine_G.eval()
-                    avg_si_snr_score = eval_fn(engine_G, eval_dir=eval_dir)
+                    avg_si_snr_score, avg_eval_loss = eval_fn(engine_G, eval_dir=eval_dir)
 
                     # Log the si-snr score to wandb
-                    wandb_logger.log({"si-snr": avg_si_snr_score})
+                    wandb_logger.log({"si-snr score": avg_si_snr_score, "eval loss": avg_eval_loss})
+
+                    should_stop = self.early_stopper.should_early_stop(avg_eval_loss)
 
                     engine_G.train()
 
@@ -257,7 +257,11 @@ class TrainLoop:
                     logger.info("Backing up")
                     self.save_checkpoint(tag=f"backup_{step:07d}")
 
-                if step % update_every == 0 or command.strip() == "save":
+                if step % update_every == 0 or command.strip() == "save" or should_stop:
+                    if should_stop:
+                        logger.info("Early stopping")
+
+                    print("Saving checkpoint")
                     self.save_checkpoint(tag="default")
 
                 if step == max_steps:
@@ -288,3 +292,20 @@ class TrainLoop:
         if loop := cls.get_running_loop():
             return loop.make_current_step_viz_path(name, suffix)
         return None
+
+class EarlyStopper:
+    def __init__(self, patience=10, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = float('inf')
+
+    def should_early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
