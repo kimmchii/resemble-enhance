@@ -80,12 +80,13 @@ def main():
         return pred, losses
 
     @torch.no_grad()
-    def eval_fn(engine: Engine, eval_dir, n_saved=10):
+    def eval_fn(engine: Engine, eval_dir, n_saved=5):
         model = engine.module
         model.eval()
 
         step = engine.global_step
         si_snr_scores = []
+        eval_losses = []
         for i, batch in enumerate(tqdm(val_dl), 1):
             batch = tree_map(lambda x: x.to(args.device) if isinstance(x, Tensor) else x, batch)
 
@@ -100,10 +101,17 @@ def main():
             rate = model.hp.wav_rate
             get_path = lambda suffix: eval_dir / f"step_{step:08}_{i:03}{suffix}"
 
-            save_wav(get_path("_input.wav"), mx_dwavs[0], rate=rate)
-            save_wav(get_path("_predict.wav"), pred_fg_dwavs[0], rate=rate)
-            save_wav(get_path("_target.wav"), fg_dwavs[0], rate=rate)
 
+            if i <= n_saved:
+                save_wav(get_path("_input.wav"), mx_dwavs[0], rate=rate)
+                save_wav(get_path("_predict.wav"), pred_fg_dwavs[0], rate=rate)
+                save_wav(get_path("_target.wav"), fg_dwavs[0], rate=rate)
+
+            # Get the model loss
+            model(mx_dwavs, fg_dwavs)
+            eval_loss = model.losses
+
+            eval_losses.append(eval_loss["l1"])
             # Calculate si-snr score
             si_snr_score = si_snr(pred_fg_dwavs[0], fg_dwavs[0])
             si_snr_scores.append(si_snr_score)
@@ -116,10 +124,7 @@ def main():
                 targ_mel=fg_mels[0].cpu().numpy(),
             )
 
-            if i >= n_saved:
-                break
-        
-        return sum(si_snr_scores)/len(si_snr_scores)
+        return sum(si_snr_scores)/len(si_snr_scores), sum(eval_losses) / len(eval_losses)
 
     train_loop = TrainLoop(
         run_dir=args.run_dir,
