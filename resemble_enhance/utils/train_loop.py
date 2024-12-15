@@ -139,9 +139,16 @@ class TrainLoop:
 
         gan_start_step = self.gan_training_start_step
 
+        should_stop = False
+        epoch_counter = 0
         while True:
             loss_G = loss_D = 0
-            should_stop = False
+
+            if self.refresh_train_dl_every > 0 and epoch_counter >= self.refresh_train_dl_every:
+                logger.info("Refreshing the dataloader")
+                # Reset the dataloader
+                epoch_counter = 0
+                train_dl, _ = create_dataloaders(self.hp, mode="denoiser")
 
             for batch in train_dl:
                 torch.cuda.synchronize()
@@ -232,8 +239,8 @@ class TrainLoop:
                 loss_l1 = stats["G/losses/l1"]
                 loss = stats["G/loss"]
 
-                if step % 100 == 0:
-                    wandb_logger.log({"generator - denoiser/loss": loss, "generator - denoiser/l1": loss_l1})
+                # if step % 1 == 0:
+                #     wandb_logger.log({"generator - denoiser/loss": loss, "generator - denoiser/l1": loss_l1})
                 # print(stats)
                 logger.info(json.dumps(stats, indent=0))
 
@@ -271,6 +278,9 @@ class TrainLoop:
                     logger.info("Training finished")
                     self.save_checkpoint(tag="default")
                     return
+
+            wandb_logger.log({"Epoch - G/denoiser/loss": loss, "Epoch - G/denoiser/l1": loss_l1})
+            epoch_counter += 1
 
     @classmethod
     def set_running_loop_(cls, loop):
