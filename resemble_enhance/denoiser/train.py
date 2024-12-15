@@ -133,6 +133,8 @@ def main():
         device=args.device,
         feed_G=feed_G,
         eval_fn=eval_fn,
+        hp=hp,
+        refresh_train_dl_every=5,
     )
 
     train_loop.run(max_steps=hp.max_steps)
