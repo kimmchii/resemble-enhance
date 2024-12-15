@@ -124,13 +124,6 @@ def main():
             si_snr_scores.append(si_snr_score)
             # print(f"si-snr: {si_snr_score}", i)
 
-            save_mels(
-                get_path(".png"),
-                cond_mel=mx_mels[0].cpu().numpy(),
-                pred_mel=pred_fg_mels[0].cpu().numpy(),
-                targ_mel=fg_mels[0].cpu().numpy(),
-            )
-
         return sum(si_snr_scores)/len(si_snr_scores), sum(eval_losses) / len(eval_losses)
 
     train_loop = TrainLoop(
