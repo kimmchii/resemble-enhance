@@ -13,6 +13,9 @@ from .control import non_blocking_input
 from .distributed import is_global_leader
 from .engine import Engine
 from .utils import tree_map
+from ..data import create_dataloaders
+from ..hparams import HParams
+
 
 logger = logging.getLogger(__name__)
 
