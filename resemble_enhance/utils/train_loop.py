@@ -56,9 +56,9 @@ class TrainLoop:
     feed_D: DisFeeder | None = None
 
     # Set update_every and eval_every to be the same
-    update_every: int = 5_000
-    eval_every: int = update_every 
-    backup_steps: tuple[int, ...] = (5_000, 100_000, 500_000)
+
+    hp: HParams  = None
+    refresh_train_dl_every: int = -1
 
     device: str = "cuda"
     eval_fn: EvalFn | None = None
