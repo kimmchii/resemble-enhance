@@ -107,6 +107,13 @@ def main():
                 save_wav(get_path("_predict.wav"), pred_fg_dwavs[0], rate=rate)
                 save_wav(get_path("_target.wav"), fg_dwavs[0], rate=rate)
 
+                save_mels(
+                    get_path(".png"),
+                    cond_mel=mx_mels[0].cpu().numpy(),
+                    pred_mel=pred_fg_mels[0].cpu().numpy(),
+                    targ_mel=fg_mels[0].cpu().numpy(),
+                )
+
             # Get the model loss
             model(mx_dwavs, fg_dwavs)
             eval_loss = model.losses
