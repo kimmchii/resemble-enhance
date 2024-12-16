@@ -71,19 +71,16 @@ def main():
     def feed_G(engine: Engine, batch: dict[str, Tensor]):
         alpha_fn = lambda: random.uniform(*hp.mix_alpha_range)
         if random.random() < hp.distort_prob:
-            batch_wavs = batch["fg_dwavs"]
+            fg_wavs = batch["fg_dwavs"]
         else:
-            batch_wavs = batch["fg_wavs"]
-        # Clean fg wav
-        fg_wavs = batch["fg_wavs"]
-        mx_wavs = mix_fg_bg(batch_wavs, batch["bg_dwavs"], alpha=alpha_fn)
-        # We compare the model output to the clean foreground not the noisy foreground
-        pred = engine(mx_wavs, fg_wavs)
+            fg_wavs = batch["fg_wavs"]
+        mx_dwavs = mix_fg_bg(fg_wavs, batch["bg_dwavs"], alpha=alpha_fn)
+        pred = engine(mx_dwavs, fg_wavs)
         losses = engine.gather_attribute("losses", prefix="losses")
         return pred, losses
 
     @torch.no_grad()
-    def eval_fn(engine: Engine, eval_dir, n_saved=5):
+    def eval_fn(engine: Engine, eval_dir, n_saved=10):
         model = engine.module
         model.eval()
 
@@ -92,15 +89,14 @@ def main():
         eval_losses = []
         for i, batch in enumerate(tqdm(val_dl), 1):
             batch = tree_map(lambda x: x.to(args.device) if isinstance(x, Tensor) else x, batch)
-            # Get the clean foreground wav
-            fg_wavs = batch["fg_wavs"]  # 1 t
+
             fg_dwavs = batch["fg_dwavs"]  # 1 t
             mx_dwavs = mix_fg_bg(fg_dwavs, batch["bg_dwavs"])
-            pred_fg_wavs = model(mx_dwavs)  # 1 t
+            pred_fg_dwavs = model(mx_dwavs, fg_dwavs)  # 1 t
 
             mx_mels = model.to_mel(mx_dwavs)  # 1 c t
-            fg_mels = model.to_mel(fg_wavs)
-            pred_fg_mels = model.to_mel(pred_fg_wavs)  # 1 c t
+            fg_mels = model.to_mel(fg_dwavs)  # 1 c t
+            pred_fg_mels = model.to_mel(pred_fg_dwavs)  # 1 c t
 
             rate = model.hp.wav_rate
             get_path = lambda suffix: eval_dir / f"step_{step:08}_{i:03}{suffix}"
@@ -108,9 +104,8 @@ def main():
 
             if i <= n_saved:
                 save_wav(get_path("_input.wav"), mx_dwavs[0], rate=rate)
-                save_wav(get_path("_predict.wav"), pred_fg_wavs[0], rate=rate)
-                save_wav(get_path("_distorted.wav"), fg_dwavs[0], rate=rate)
-                save_wav(get_path("_target.wav"), fg_wavs[0], rate=rate)
+                save_wav(get_path("_predict.wav"), pred_fg_dwavs[0], rate=rate)
+                save_wav(get_path("_target.wav"), fg_dwavs[0], rate=rate)
 
                 save_mels(
                     get_path(".png"),
@@ -120,12 +115,11 @@ def main():
                 )
 
             # Get the model loss
-            model(mx_dwavs, fg_wavs)
             eval_loss = model.losses
 
             eval_losses.append(eval_loss["l1"])
             # Calculate si-snr score
-            si_snr_score = si_snr(pred_fg_wavs[0], fg_wavs[0])
+            si_snr_score = si_snr(pred_fg_dwavs[0], fg_dwavs[0])
             si_snr_scores.append(si_snr_score)
             # print(f"si-snr: {si_snr_score}", i)
 
